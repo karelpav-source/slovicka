@@ -464,7 +464,7 @@ const S = oprav(nacti());
 function uloz(){ try { localStorage.setItem(KLIC, JSON.stringify(S)); } catch(e){} }
 
 /* ---------- kdo hraje: při každém otevření Jakub; rodiče mají jen vlastní rekordy ---------- */
-const HRACI = { jakub:{ jm:'Jakub', ik:'👦', osl:'Jakube' }, tata:{ jm:'Táta', ik:'👨', osl:'tati' }, mama:{ jm:'Máma', ik:'👩', osl:'mami' } };
+const HRACI = { jakub:{ jm:'Jakub', ik:'👦', osl:'Jakube' }, ella:{ jm:'Ella', ik:'👧', osl:'Ello' }, tata:{ jm:'Táta', ik:'👨', osl:'tati' }, mama:{ jm:'Máma', ik:'👩', osl:'mami' } };
 let hrac = 'jakub';
 const jeJakub = () => hrac === 'jakub';
 const rekKlic = (n, h=hrac) => h==='jakub' ? 'spoj'+n : h+'|spoj'+n;
@@ -616,7 +616,7 @@ function domov(){
       <span class="serie">${jeJakub() ? '' : 'Jakub: '}${serieHtml()}</span>
       <span class="hraci">Hraje: ${Object.entries(HRACI).map(([k,h])=>`<button class="hrac ${k===hrac?'zap':''}" data-hrac="${k}">${h.ik} ${h.jm}</button>`).join('')}</span>
     </div>
-    ${jeJakub() ? '' : '<div class="rodic">Teď hraje rodič: Jakubův postup a hvězdičky se nemění, počítají se jen rekordy.</div>'}
+    ${jeJakub() ? '' : `<div class="rodic">Teď hraje ${esc(H.jm)}: Jakubův postup a hvězdičky se nemění, počítají se jen rekordy.</div>`}
     <div class="sady"><button class="sada ${sel?'':'zap'}" data-sada="*">Všechno <small>${vsechnaSlova().length}</small></button>${SADY.map(s=>`<button class="sada ${sel&&sel.includes(s.id)?'zap':''}" data-sada="${esc(s.id)}">${esc(s.nazev)} <small>${s.slova.length}</small></button>`).join('')}</div>
     <div class="rezimy">
       <button class="rezim" data-rezim="en2cz"><span class="ik">🇬🇧 → 🇨🇿</span><span><b>Kartičky</b><br><small>Uvidíš anglicky, řekni česky</small></span></button>
