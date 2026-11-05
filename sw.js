@@ -7,7 +7,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
     fetch(e.request)
-      .then(r => { const kopie = r.clone(); caches.open(CACHE).then(c => c.put(e.request, kopie)); return r; })
+      .then(r => { if(!r.ok) throw new Error('bad'); const kopie = r.clone(); caches.open(CACHE).then(c => c.put(e.request, kopie)); return r; })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html')))
   );
 });
