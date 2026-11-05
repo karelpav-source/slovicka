@@ -455,12 +455,7 @@ const SOUPERI = ['real', 'barca', 'atleti', 'bayern', 'city', 'liverpool', 'arse
 const KLIC = 'jakub-slovicka-v1';
 function nacti(){ try { return JSON.parse(localStorage.getItem(KLIC)) || {}; } catch(e){ return {}; } }
 const VYCHOZI = () => ({ slova:{}, hvezdy:0, sady:null, zvuk:true, rekordy:{}, dny:null, penalty:{} });
-const obj = x => x && typeof x==='object' && !Array.isArray(x) ? x : {};
-/* uložený stav a záloha můžou být poškozené nebo ze staré verze – vždycky doplnit správný tvar */
-function oprav(d){ d = obj(d); return { slova: obj(d.slova), hvezdy: Number(d.hvezdy)||0,
-  sady: Array.isArray(d.sady) ? d.sady : null, zvuk: d.zvuk !== false, rekordy: obj(d.rekordy),
-  dny: d.dny && typeof d.dny==='object' ? d.dny : null, penalty: obj(d.penalty) }; }
-const S = oprav(nacti());
+const S = Object.assign(VYCHOZI(), nacti());
 function uloz(){ try { localStorage.setItem(KLIC, JSON.stringify(S)); } catch(e){} }
 
 /* ---------- kdo hraje: při každém otevření Jakub; rodiče mají jen vlastní rekordy ---------- */
@@ -543,7 +538,7 @@ try { if(navigator.audioSession) navigator.audioSession.type = 'playback'; } cat
 let ac = null;
 function audio(){
   if(!ac){ const C = window.AudioContext || window.webkitAudioContext; if(!C) return null; ac = new C(); }
-  if(ac.state!=='running') try { ac.resume(); } catch(e){}
+  if(ac.state==='suspended') ac.resume();
   return ac;
 }
 function ton(f, start, dur, typ='sine', vol=0.2){
@@ -572,7 +567,7 @@ function mluv(text){
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(varianty(text).join(', '));
     u.lang = 'en-GB'; const v = anglickyHlas(); if(v) u.voice = v; u.rate = 0.85;
-    setTimeout(() => speechSynthesis.speak(u), 0);
+    speechSynthesis.speak(u);
   } catch(e){}
 }
 if('speechSynthesis' in window) try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = ()=>{}; } catch(e){}
@@ -613,7 +608,7 @@ function domov(){
     <div class="pozdrav">Ahoj ${H.osl}! 👋</div>
     <div class="postup">${jeJakub() ? 'Umíš' : 'Jakub umí'} <b>${umi}</b> z <b>${slova.length}</b> slovíček</div>
     <div class="radek">
-      <span class="serie">${jeJakub() ? '' : 'Jakub: '}${serieHtml()}</span>
+      <span class="serie">${serieHtml()}</span>
       <span class="hraci">Hraje: ${Object.entries(HRACI).map(([k,h])=>`<button class="hrac ${k===hrac?'zap':''}" data-hrac="${k}">${h.ik} ${h.jm}</button>`).join('')}</span>
     </div>
     ${jeJakub() ? '' : '<div class="rodic">Teď hraje rodič: Jakubův postup a hvězdičky se nemění, počítají se jen rekordy.</div>'}
@@ -819,7 +814,7 @@ function psani(slova){
         if(pol.pokus < 2) fronta.splice(Math.min(3, fronta.length), 0, { w, pokus: pol.pokus+1 });
         else hotovo++;
       }
-      const gen = generace; if(S.zvuk) setTimeout(() => { if(gen===generace && S.zvuk) mluv(w.en); }, 250);
+      if(S.zvuk) setTimeout(() => mluv(w.en), 250);
       $('#tl').innerHTML = '<button class="velke modre" id="dal">Další →</button>';
       $('#dal').onclick = kolo;
     }
@@ -931,7 +926,7 @@ function penalty(slova, souper){
       (strilim ? ja : on).push(gol);
       const dobre = strilim === gol;   // dobře pro Jakuba: jeho gól, nebo jeho zákrok
       efekt(dobre ? 'ok' : 'spatne');
-      if(strilim && S.zvuk) setTimeout(() => { if(gen===generace && S.zvuk) mluv(w.en); }, 200);
+      if(strilim && S.zvuk) setTimeout(() => mluv(w.en), 200);
       setTimeout(() => {
         const h = $('#hlaska'); if(!h || gen !== generace) return;
         h.textContent = gol ? (strilim ? 'GÓÓÓL! 🎉' : 'Gól soupeře 😬') : (strilim ? 'Chytil to! 🧤' : 'Chytil jsi to! 🧤🎉');
@@ -991,7 +986,7 @@ function kviz(){
       if(ok){ spr++; efekt('ok'); } else { efekt('spatne'); chybna.push({ en: f.jm, cz: klubova ? KLUBY[f.klub].nazev : Z[1] }); }
       const d = $('#dres'); d.setAttribute('style', dresStyl(f.klub)); d.textContent = Z[0];
       $('#zprava').innerHTML = `${ok ? '✅' : '❌'} ${esc(veta)}${klubova ? '' : `<br><small>${esc(Z[1])} = ${esc(Z[2])}</small>`}`;
-      const gen = generace; if(S.zvuk) setTimeout(() => { if(gen===generace && S.zvuk) mluv(veta); }, 250);
+      if(S.zvuk) setTimeout(() => mluv(veta), 250);
       i++;
       $('#tl').innerHTML = `<button class="velke modre" id="dal">${i < celkem ? 'Další →' : 'Výsledek →'}</button>`;
       $('#dal').onclick = kolo;
@@ -1010,8 +1005,8 @@ function zalohaCti(kod){
   const t = String(kod).trim().replace(/\s+/g, '');
   if(!t.startsWith('JS1.')) throw new Error('kód');
   const d = JSON.parse(decodeURIComponent(escape(atob(t.slice(4)))));
-  if(!d || typeof d !== 'object' || !d.slova || typeof d.slova !== 'object') throw new Error('data');
-  return oprav(d);
+  if(!d || typeof d !== 'object' || typeof d.slova !== 'object') throw new Error('data');
+  return d;
 }
 
 /* ---------- seznam slovíček a postup ---------- */
@@ -1022,7 +1017,8 @@ function seznam(){
     <table><thead><tr><th>Anglicky</th><th>Česky</th><th>🇬🇧→🇨🇿</th><th>🇨🇿→🇬🇧</th><th>✏️</th></tr></thead>
     <tbody>${slova.map((w,i)=>`${i===0||slova[i-1].sada!==w.sada?`<tr class="sekce"><td colspan="5">${esc(SADY.find(s=>s.id===w.sada).nazev)}</td></tr>`:''}<tr><td><button class="mluv male" data-mluv="${esc(w.en)}" aria-label="Přečíst">🔊</button> ${esc(w.en)}</td><td>${esc(w.cz)}</td><td>${tecky(w,'en2cz')}</td><td>${tecky(w,'cz2en')}</td><td>${tecky(w,'psani')}</td></tr>`).join('')}</tbody></table>
     <div class="legenda">Zelené tečky = kolikrát za sebou slovo věděl (max 5). Slovíčko „umí“, když má aspoň 3 v obou směrech kartiček.</div>
-    ${jeJakub() ? '<button class="odkaz" id="reset">Vynulovat postup</button><button class="odkaz" id="zal">💾 Záloha a přenos postupu</button>' : '<div class="legenda">Zálohu a mazání postupu může dělat jen Jakub (přepni nahoře „Hraje: Jakub“).</div>'}
+    <button class="odkaz" id="reset">Vynulovat postup</button>
+    <button class="odkaz" id="zal">💾 Záloha a přenos postupu</button>
     <div class="zaloha" id="zalPanel" hidden>
       <div class="legenda">Postup je uložený jen v tomhle zařízení a v tomhle prohlížeči. Když chceš pokračovat jinde, zkopíruj si kód (třeba do Poznámek) a na druhém zařízení ho vlož sem dolů.</div>
       <textarea id="kod" readonly rows="3"></textarea>
@@ -1032,7 +1028,6 @@ function seznam(){
       <div class="zprava" id="zalZprava"></div>
     </div>
   </div>`, 'seznam-obr');
-  if(!jeJakub()) return;
   $('#zal').onclick = () => { const p = $('#zalPanel'); p.hidden = !p.hidden; $('#kod').value = zalohaKod(); };
   const hlas = (t, ok) => { const z = $('#zalZprava'); z.textContent = t; z.style.color = ok ? 'var(--zelena)' : 'var(--cervena)'; };
   $('#kopir').onclick = () => {
