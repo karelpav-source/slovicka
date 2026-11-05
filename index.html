@@ -1067,7 +1067,14 @@ function prehled(){
    UKLÁDÁNÍ NA INTERNET (Firebase Firestore) — společný postup pro všechna
    zařízení v rodině. Zapne se, až sem přijde config z Firebase konzole.
    ===================================================================== */
-const FIREBASE_CONFIG = null;
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAwtS7gfuUaM_EJPYhGT2eEGviyO3t7BvE",
+  authDomain: "jakubova-slovicka.firebaseapp.com",
+  projectId: "jakubova-slovicka",
+  storageBucket: "jakubova-slovicka.firebasestorage.app",
+  messagingSenderId: "432268404382",
+  appId: "1:432268404382:web:2758e20bc043b3dce33d8f",
+};
 const cloudMozne = () => !!(FIREBASE_CONFIG || window.__cloudFake);
 const CLOUD_POLE = ['slova','hvezdy','rekordy','dny','penalty','cas','hry','upd'];
 let cloudDb = null, cloudTimer = null, cloudStav = '';
