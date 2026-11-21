@@ -257,6 +257,12 @@ main.penalty{gap:14px}
 .ligaTl .ik{font-size:44px;line-height:1}
 .ligaTl b{font-size:26px}
 .ligaTl small{font-size:16px;color:#713f12}
+.sada.velka{font-size:19px;padding:12px 20px}
+.sada.velka b{color:var(--ink)}
+.smerVyber{display:flex;flex-direction:column;align-items:center;gap:8px;width:min(760px,100%)}
+.smerSl{font-size:18px;font-weight:800;border-radius:999px;padding:6px 18px;margin-bottom:-6px;background:#fee2e2;color:#991b1b}
+.smerSl.cz{background:#dcfce7;color:#166534}
+.zadani b.cMin{color:#dc2626} .zadani b.cPrit{color:#16a34a}
 .ligaKolo{font-size:18px;font-weight:800;color:#b45309;background:#fef3c7;border-radius:999px;padding:6px 18px;margin-bottom:-6px}
 .limit{width:min(560px,100%);height:10px;background:rgba(255,255,255,.8);border-radius:999px;overflow:hidden;margin:-4px 0}
 .limit i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#dc2626,#f59e0b,#16a34a);border-radius:999px;transform-origin:left;animation:ubyva linear forwards}
@@ -359,6 +365,8 @@ main.obchod > :first-child{margin-top:8px}
   .ligaTl b{font-size:21px}
   .ligaTl small{font-size:14px}
   .ligaKolo{font-size:15px}
+  .smerSl{font-size:15px}
+  .sada.velka{font-size:16px;padding:10px 14px}
   .regal{grid-template-columns:repeat(3,1fr);gap:8px}
   .album{grid-template-columns:repeat(3,1fr);gap:8px}
   .fkarta{font-size:14px;min-height:118px}
@@ -606,14 +614,14 @@ const SOUPERI = ['real', 'barca', 'atleti', 'bayern', 'city', 'liverpool', 'arse
 /* ---------- uložený postup ---------- */
 const KLIC = 'jakub-slovicka-v1';
 function nacti(){ try { return JSON.parse(localStorage.getItem(KLIC)) || {}; } catch(e){ return {}; } }
-const VYCHOZI = () => ({ slova:{}, hvezdy:0, sady:null, zvuk:true, rekordy:{}, dny:null, penalty:{}, cas:{}, hry:{}, rodina:null, upd:0, slSk:null, domaci:'jakub', v:0 });
+const VYCHOZI = () => ({ slova:{}, hvezdy:0, sady:null, zvuk:true, rekordy:{}, dny:null, penalty:{}, cas:{}, hry:{}, rodina:null, upd:0, slSk:null, slSmer:'en', domaci:'jakub', v:0 });
 const obj = x => x && typeof x==='object' && !Array.isArray(x) ? x : {};
 /* uložený stav a záloha můžou být poškozené nebo ze staré verze – vždycky doplnit správný tvar */
 function oprav(d){ d = obj(d); return { slova: obj(d.slova), hvezdy: Number(d.hvezdy)||0,
   sady: Array.isArray(d.sady) ? d.sady : null, zvuk: d.zvuk !== false, rekordy: obj(d.rekordy),
   dny: d.dny && typeof d.dny==='object' ? d.dny : null, penalty: obj(d.penalty), cas: obj(d.cas), hry: obj(d.hry),
   rodina: typeof d.rodina==='string' && d.rodina ? d.rodina : null, upd: Number(d.upd)||0,
-  slSk: [0,1,2].includes(d.slSk) ? d.slSk : null,
+  slSk: [0,1,2].includes(d.slSk) ? d.slSk : null, slSmer: d.slSmer === 'cz' ? 'cz' : 'en',
   domaci: ['jakub','ella','tata','mama'].includes(d.domaci) ? d.domaci : 'jakub', v: Number(d.v)||0 }; }
 const S = oprav(nacti());
 /* Tři stupně ukládání:
@@ -1183,12 +1191,17 @@ function penalty(slova, souper, liga=false){
   const sl = jeSl(slova[0]);
   if(!souper){
     const lm = LM(), beh = lm.beh && !!lm.beh.sl === sl && KOLA_LM[lm.beh.kolo] ? lm.beh : null;
+    const smerTl = sl ? `<div class="smerVyber"><div class="jazyk">Co budeš celý zápas hledat?</div><div class="sady">
+        <button class="sada velka ${S.slSmer === 'en' ? 'zap' : ''}" data-smer="en">🟢 see → hledám 🔴 <b>minulý</b> čas</button>
+        <button class="sada velka ${S.slSmer === 'cz' ? 'zap' : ''}" data-smer="cz">🔴 saw → hledám 🟢 <b>přítomný</b> čas</button></div></div>` : '';
     obrazovka(`<div class="pozdrav mensi">⚽ Penalty</div>
+      ${smerTl}
       <button class="ligaTl" id="liga"><span class="ik">🏆</span><span><b>Liga mistrů</b><br><small>${beh ? `Pokračovat: ${KOLA_LM[beh.kolo].n.toLowerCase()} proti ${esc(KLUBY[beh.souperi[beh.kolo]].nazev)}` : 'Čtvrtfinále → semifinále → finále. Soupeři přitvrzují!'}${lm.tituly ? ` · vyhráno ${lm.tituly}×` : ''}</small></span></button>
       <div class="jazyk">nebo přátelský zápas:</div>
       <div class="kluby">${SOUPERI.map(k => { const r = (S.penalty||{})[(sl ? 'v:' : '') + k];
         return `<button class="klub" data-klub="${k}"><span class="dres" style="${dresStyl(k)}"></span><span>${esc(KLUBY[k].nazev)}</span>${r && r.v ? `<small>🏆 ${r.v}×</small>` : ''}</button>`; }).join('')}</div>
-      <div class="legenda stred">${sl ? 'Když kopeš ty, uvidíš minulý čas a vybereš přítomný. Když kope soupeř, chytáš: vyber minulý čas.' : 'Když kopeš ty, vyber anglické slovo. Když kope soupeř, chytáš: vyber český překlad.'}</div>`, 'hra');
+      <div class="legenda stred">${sl ? (S.slSmer === 'en' ? 'Celý zápas uvidíš přítomný čas a vybíráš minulý.' : 'Celý zápas uvidíš minulý čas a vybíráš přítomný.') + ' Když kopeš, správná odpověď je gól. Když chytáš, správná odpověď je zákrok.' : 'Když kopeš ty, vyber anglické slovo. Když kope soupeř, chytáš: vyber český překlad.'}</div>`, 'hra');
+    main.querySelectorAll('[data-smer]').forEach(b => b.onclick = () => { S.slSmer = b.dataset.smer; ulozMistne(); penalty(slova); });
     $('#liga').onclick = () => beh ? ligaKolo(slova) : ligaStart(slova);
     main.querySelectorAll('[data-klub]').forEach(b => b.onclick = () => penalty(slova, b.dataset.klub));
     return;
@@ -1197,7 +1210,8 @@ function penalty(slova, souper, liga=false){
   const K = KLUBY[souper];
   const kolo = liga ? LM().beh.kolo : 0, P = liga ? KOLA_LM[kolo] : { n: '', moz: 3, limit: 0 };
   const pool = slova.length >= P.moz + 2 ? slova : sl ? vsechnaSlovesa() : vsechnaSlova();
-  let davka = vyberDavku(slova, 'cz2en', 20), qi = 0;
+  const smerSl = sl ? S.slSmer : null;   // slovesa: 'en' = ptám se přítomným časem, 'cz' = minulým; platí celý zápas
+  let davka = vyberDavku(slova, smerSl === 'en' ? 'en2cz' : 'cz2en', 20), qi = 0;
   const dalsiSlovo = () => { if(qi >= davka.length){ davka = zamichej(davka); qi = 0; } return davka[qi++]; };
   const ja = [], on = [], chybna = [];
   let naRade = 'ja', spr = 0, celkem = 0;
@@ -1210,11 +1224,13 @@ function penalty(slova, souper, liga=false){
 
   function kop(){
     const w = dalsiSlovo(), strilim = naRade === 'ja', gen = generace + 1;
-    const otazka = strilim ? w.cz : w.en, pole = strilim ? 'en' : 'cz';
+    const stranaO = smerSl || (strilim ? 'cz' : 'en'), pole = stranaO === 'en' ? 'cz' : 'en';   // slovíčka střídají jazyk, slovesa ne
+    const otazka = w[stranaO];
     const dres = strilim ? K.barvy : mujDres;
-    const recO = rec(w, strilim ? 'cz' : 'en'), recA = rec(w, strilim ? 'en' : 'cz');
+    const recO = rec(w, stranaO), recA = rec(w, pole);
     obrazovka(`
       ${liga ? `<div class="ligaKolo">🏆 Liga mistrů · ${P.n}${P.limit ? ` · na odpověď ${P.limit} s` : ''}</div>` : ''}
+      ${sl ? `<div class="smerSl ${smerSl}">${smerSl === 'en' ? '🟢 přítomný → hledáš 🔴 MINULÝ čas' : '🔴 minulý → hledáš 🟢 PŘÍTOMNÝ čas'}</div>` : ''}
       <div class="tabule">
         <div class="tym"><span class="dres" style="background:${mujDres[0]}"></span><b>${esc(HRACI[hrac].jm)}</b><span class="kola">${tecky(ja)}</span></div>
         <div class="skore">${goly(ja)} : ${goly(on)}</div>
@@ -1226,7 +1242,7 @@ function penalty(slova, souper, liga=false){
         <div class="hlaska" id="hlaska"></div>
       </div>
       ${P.limit ? `<div class="limit" id="limit"><i style="animation-duration:${P.limit}s"></i></div>` : ''}
-      <div class="zadani">${strilim ? (sl ? '⚽ <b>Kopeš ty!</b> Jaký je přítomný čas od:' : '⚽ <b>Kopeš ty!</b> Jak se řekne anglicky:') : (sl ? '🧤 <b>Chytáš!</b> Jaký je minulý čas od:' : '🧤 <b>Chytáš!</b> Co znamená:')}</div>
+      <div class="zadani">${strilim ? '⚽ <b>Kopeš ty!</b>' : '🧤 <b>Chytáš!</b>'} ${sl ? (smerSl === 'en' ? 'Jaký je <b class="cMin">minulý</b> čas od:' : 'Jaký je <b class="cPrit">přítomný</b> čas od:') : strilim ? 'Jak se řekne anglicky:' : 'Co znamená:'}</div>
       <div class="otazka">${esc(otazka)} ${recO ? `<button class="mluv male" data-mluv="${esc(recO)}" aria-label="Přečíst">🔊</button>` : ''}</div>
       ${tlacitkaMoznosti(moznosti(w, pole, pool, P.moz))}`, 'hra penalty');
     if(recO && S.zvuk) mluv(recO);
@@ -1621,7 +1637,7 @@ function seznam(){
     let d; try { d = zalohaCti($('#vloz').value); } catch(err){ return hlas('Tohle nevypadá jako kód zálohy.', false); }
     if(!potvrditObnovu){ potvrditObnovu = true; e.target.textContent = 'Opravdu přepsat postup? Ťukni znovu'; return; }
     // nastavení tohoto zařízení (rodinný kód, zvuk, lekce) zůstává; čas a počty her se sloučí
-    const drz = { rodina: S.rodina, zvuk: S.zvuk, sady: S.sady, slSk: S.slSk, domaci: S.domaci, v: S.v };
+    const drz = { rodina: S.rodina, zvuk: S.zvuk, sady: S.sady, slSk: S.slSk, slSmer: S.slSmer, domaci: S.domaci, v: S.v };
     const cas = slucDny(S.cas, d.cas), hry = slucDny(S.hry, d.hry);
     for(const k of Object.keys(S)) delete S[k];
     Object.assign(S, VYCHOZI(), d, drz, { cas, hry }); ulozPostup(); seznam();
