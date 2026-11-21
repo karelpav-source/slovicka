@@ -235,6 +235,7 @@ main.penalty{gap:14px}
 .seznam td.minuly{font-weight:800;color:#7c3aed}
 .seznam td small{font-size:13px;color:var(--muted);font-weight:600}
 @media (min-width:900px){ .rezimy.tri{grid-template-columns:repeat(3,minmax(0,1fr));width:min(860px,100%)} }
+.odkaz.maly{font-size:15px;padding:4px 12px;margin-top:-12px}
 .odkazy{display:flex;flex-wrap:wrap;justify-content:center;gap:0 6px}
 .serie.cas{color:#1d4ed8;background:#eff6ff}
 .serie.cas b{color:#1e3a8a}
@@ -507,21 +508,32 @@ const SOUPERI = ['real', 'barca', 'atleti', 'bayern', 'city', 'liverpool', 'arse
 /* ---------- uložený postup ---------- */
 const KLIC = 'jakub-slovicka-v1';
 function nacti(){ try { return JSON.parse(localStorage.getItem(KLIC)) || {}; } catch(e){ return {}; } }
-const VYCHOZI = () => ({ slova:{}, hvezdy:0, sady:null, zvuk:true, rekordy:{}, dny:null, penalty:{}, cas:{}, hry:{}, rodina:null, upd:0, slSk:null });
+const VYCHOZI = () => ({ slova:{}, hvezdy:0, sady:null, zvuk:true, rekordy:{}, dny:null, penalty:{}, cas:{}, hry:{}, rodina:null, upd:0, slSk:null, domaci:'jakub', v:0 });
 const obj = x => x && typeof x==='object' && !Array.isArray(x) ? x : {};
 /* uložený stav a záloha můžou být poškozené nebo ze staré verze – vždycky doplnit správný tvar */
 function oprav(d){ d = obj(d); return { slova: obj(d.slova), hvezdy: Number(d.hvezdy)||0,
   sady: Array.isArray(d.sady) ? d.sady : null, zvuk: d.zvuk !== false, rekordy: obj(d.rekordy),
   dny: d.dny && typeof d.dny==='object' ? d.dny : null, penalty: obj(d.penalty), cas: obj(d.cas), hry: obj(d.hry),
   rodina: typeof d.rodina==='string' && d.rodina ? d.rodina : null, upd: Number(d.upd)||0,
-  slSk: [0,1,2].includes(d.slSk) ? d.slSk : null }; }
+  slSk: [0,1,2].includes(d.slSk) ? d.slSk : null,
+  domaci: ['jakub','ella','tata','mama'].includes(d.domaci) ? d.domaci : 'jakub', v: Number(d.v)||0 }; }
 const S = oprav(nacti());
-/* uloz(false) = jen místní nastavení (zvuk, lekce, kód) – nezmění čas poslední změny postupu */
-function uloz(postup=true){ if(postup) S.upd = Date.now(); try { localStorage.setItem(KLIC, JSON.stringify(S)); } catch(e){} if(postup) cloudNaplanuj(); }
+/* Tři stupně ukládání:
+   ulozMistne() – jen do tohoto zařízení (zvuk, vybraná lekce, rodinný kód)
+   uloz()       – navíc pošle na internet (čas, počty her, rekordy ostatních hráčů)
+   ulozPostup() – změnil se Jakubův postup; jen tohle posouvá `upd`, podle kterého se pozná novější stav.
+   Dřív posouvalo `upd` každé zavření aplikace, takže rodičův telefon přepsal Jakubův postup starším. */
+function ulozMistne(){ try { localStorage.setItem(KLIC, JSON.stringify(S)); } catch(e){} }
+function uloz(){ ulozMistne(); cloudNaplanuj(); }
+function ulozPostup(){ S.upd = Date.now(); uloz(); }
+if(S.v < 2){   // přechod ze staré verze: `upd` nastavit podle posledního dne, kdy Jakub opravdu hrál
+  S.upd = S.dny && S.dny.posl ? Math.min(Date.now(), new Date(S.dny.posl + 'T23:59:59').getTime() || 0) : 0;
+  S.v = 2; ulozMistne();
+}
 
-/* ---------- kdo hraje: při každém otevření Jakub; rodiče mají jen vlastní rekordy ---------- */
+/* ---------- kdo hraje: po otevření ten, komu zařízení patří (S.domaci, výchozí Jakub); ostatní mají jen vlastní rekordy ---------- */
 const HRACI = { jakub:{ jm:'Jakub', ik:'👦', osl:'Jakube' }, ella:{ jm:'Ella', ik:'👧', osl:'Ello' }, tata:{ jm:'Táta', ik:'👨', osl:'tati' }, mama:{ jm:'Máma', ik:'👩', osl:'mami' } };
-let hrac = 'jakub';
+let hrac = S.domaci;
 const jeJakub = () => hrac === 'jakub';
 /* p = '' slovíčka, 'v' slovesa (vlastní rekordy) */
 const rekKlic = (n, h=hrac, p='') => (h==='jakub' ? '' : h+'|') + p + 'spoj' + n;
@@ -558,7 +570,13 @@ setInterval(() => {
   if(document.visibilityState !== 'visible' || !vHre() || Date.now() - posledniAkce > 90000) return;
   pricti(1); if(++tikani % 20 === 0) uloz();
 }, 1000);
-document.addEventListener('visibilitychange', () => { if(document.visibilityState !== 'visible') uloz(); else cloudStahni(); });
+let skrytoOd = 0;
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState !== 'visible'){ skrytoOd = Date.now(); ulozMistne(); cloudSync(); return; }
+  // návrat: po delší pauze zase hraje ten, komu zařízení patří, a přehledy ukazují dnešek
+  if(skrytoOd && Date.now() - skrytoOd > 10*60*1000){ hrac = S.domaci; domov(); } else prekresli();
+  cloudSync();
+});
 window.addEventListener('pagehide', uloz);
 const predDny = n => { const d = new Date(); d.setDate(d.getDate()-n); return denStr(d); };
 const casDne = (h, den) => (S.cas[h]||{})[den] || 0;
@@ -588,7 +606,7 @@ function vybraneSady(){
 function aktivniSady(){ return vybraneSady() || SADY.map(s=>s.id); }
 function vybranaSlova(){ const sel = aktivniSady(); return vsechnaSlova().filter(w=>sel.includes(w.sada)); }
 function box(w, smer){ return (S.slova[w.id]||{})[smer] || 0; }
-function setBox(w, smer, v){ if(!jeJakub()) return; (S.slova[w.id] = S.slova[w.id] || {})[smer] = v; uloz(); }
+function setBox(w, smer, v){ if(!jeJakub()) return; (S.slova[w.id] = S.slova[w.id] || {})[smer] = v; ulozPostup(); }
 /* n možností k výběru: správná + náhodné jiné (bez duplicit textu) */
 function moznosti(w, pole, pool, n){
   const spr = w[pole], videne = new Set([norm(spr)]), jine = [];
@@ -601,6 +619,7 @@ function moznosti(w, pole, pool, n){
 }
 /* nejslabší slova dopředu (krabičky 0–5), mezi stejnými náhodně */
 function vyberDavku(slova, smer, max=10){
+  if(!jeJakub()) return zamichej(slova).slice(0, max);   // krabičky jsou Jakubovy, ostatní dostanou náhodný výběr
   return zamichej(zamichej(slova).sort((a,b)=>box(a,smer)-box(b,smer)).slice(0,max));
 }
 function norm(t){
@@ -609,8 +628,11 @@ function norm(t){
 }
 const bezClenu = t => t.replace(/^(a|an|the|to) /,'');
 function spravne(odpoved, cil){
-  const o = norm(odpoved);
-  return varianty(cil).some(v => { const n = norm(v); return o===n || bezClenu(o)===bezClenu(n); });
+  const o = norm(odpoved), vs = varianty(cil).map(norm);
+  const sedi = x => vs.some(n => x===n || bezClenu(x)===bezClenu(n));
+  if(sedi(o) || o === norm(cil)) return true;                       // jedna z možností, nebo celé „was / were“
+  const casti = String(odpoved).split(/[\/,;]+/).map(norm).filter(Boolean);
+  return casti.length > 1 && casti.every(sedi);                     // „was, were“
 }
 
 /* ---------- zvuky ---------- */
@@ -663,9 +685,9 @@ function konfety(){
 }
 
 /* ---------- obrazovky ---------- */
-let timerId = null, generace = 0;
+let timerId = null, generace = 0, znovaFn = null;   // znovaFn = jak znovu nakreslit aktuální přehledovou obrazovku
 function obrazovka(html, trida=''){
-  clearInterval(timerId); generace++;
+  clearInterval(timerId); generace++; znovaFn = null;
   if(/^domov/.test(trida) && vHre()) uloz();
   main.className = trida; main.innerHTML = html;
   main.scrollTop = 0;   // nová obrazovka vždy od začátku (na telefonu se jinak otevřela odrolovaná)
@@ -678,8 +700,9 @@ main.addEventListener('click', e => {
   if(b) mluv(b.dataset.mluv);
 });
 $('#domu').onclick = () => { try { speechSynthesis.cancel(); } catch(e){} domov(); };
-$('#zvuk').onclick = () => { S.zvuk = !S.zvuk; uloz(false); $('#zvuk').textContent = S.zvuk ? '🔊' : '🔇'; };
+$('#zvuk').onclick = () => { S.zvuk = !S.zvuk; ulozMistne(); $('#zvuk').textContent = S.zvuk ? '🔊' : '🔇'; };
 
+function prekresli(){ $('#hvezdy').textContent = '⭐ ' + S.hvezdy; if(znovaFn) znovaFn(); }
 const lista = (hotovo, celkem) => `<div class="horni"><div class="lista"><div class="pruh" style="width:${celkem?Math.round(hotovo/celkem*100):0}%"></div></div><div class="pocet">${hotovo} / ${celkem}</div></div>`;
 
 function domov(){
@@ -695,6 +718,7 @@ function domov(){
       <span class="hraci">Hraje: ${Object.entries(HRACI).map(([k,h])=>`<button class="hrac ${k===hrac?'zap':''}" data-hrac="${k}">${h.ik} ${h.jm}</button>`).join('')}</span>
     </div>
     ${jeJakub() ? '' : `<div class="rodic">Teď hraje ${esc(H.jm)}: Jakubův postup a hvězdičky se nemění, počítají se jen rekordy.</div>`}
+    ${hrac !== S.domaci ? `<button class="odkaz maly" id="pin">📌 Na tomhle zařízení hraju vždycky já (${esc(H.jm)})</button>` : ''}
     <div class="sady"><button class="sada ${sel?'':'zap'}" data-sada="*">Všechno <small>${vsechnaSlova().length}</small></button>${SADY.map(s=>`<button class="sada ${sel&&sel.includes(s.id)?'zap':''}" data-sada="${esc(s.id)}">${esc(s.nazev)} <small>${s.slova.length}</small></button>`).join('')}</div>
     <div class="rezimy">
       <button class="rezim" data-rezim="en2cz"><span class="ik">🇬🇧 → 🇨🇿</span><span><b>Kartičky</b><br><small>Uvidíš anglicky, řekni česky</small></span></button>
@@ -710,6 +734,8 @@ function domov(){
   `, 'domov');
   $('#prehled').onclick = prehled;
   $('#slovesa').onclick = slovesaDomov;
+  if($('#pin')) $('#pin').onclick = () => { S.domaci = hrac; ulozMistne(); domov(); };
+  znovaFn = domov;
   if($('#cloud')) $('#cloud').onclick = cloudObrazovka;
   main.querySelectorAll('[data-hrac]').forEach(b => b.onclick = () => { hrac = b.dataset.hrac; domov(); });
   main.querySelectorAll('[data-sada]').forEach(b => b.onclick = () => {
@@ -718,7 +744,7 @@ function domov(){
     if(id==='*') s = null;                      // všechny lekce
     else if(!s) s = [id];                       // z „Všechno“ → jen tahle lekce
     else if(s.includes(id)) s = s.filter(x=>x!==id); else s = s.concat(id);
-    S.sady = s && s.length ? s : null; uloz(false); domov();
+    S.sady = s && s.length ? s : null; ulozMistne(); domov();
   });
   main.querySelectorAll('[data-rezim]').forEach(b => b.onclick = () => spust(b.dataset.rezim));
   $('#seznam').onclick = seznam;
@@ -736,7 +762,7 @@ function spust(rezim, slova){
 function vysledek({ hvezd, text, chybna=[], rezim, slova, nadpis, znovu, opakovatChybna=true }){
   if(jeJakub()) S.hvezdy += hvezd;
   { const h = S.hry[hrac] || (S.hry[hrac] = {}); h[dnes()] = herDne(hrac, dnes()) + 1; }
-  zapisDen(); uloz();
+  zapisDen(); jeJakub() ? ulozPostup() : uloz();
   efekt('fanfara'); if(hvezd===3) konfety();
   nadpis = nadpis || (hvezd===3 ? `Výborně, ${HRACI[hrac].osl}! 🎉` : hvezd===2 ? 'Moc dobře! 👍' : 'Dobrá práce, příště to bude lepší! 💪');
   obrazovka(`<div class="vysledek">
@@ -787,11 +813,12 @@ function karticky(smer, slova){
     let odkryto = false;
     function odkryj(){
       if(odkryto) return; odkryto = true;
+      const t0 = Date.now();   // druhé ťuknutí hned po prvním nesmí trefit nové tlačítko
       $('#odp').hidden = false; $('#tukni').remove();
       if(recA && S.zvuk) mluv(recA);
       $('#tl').innerHTML = '<button class="velke cervene" id="ne">❌ Nevěděl jsem</button><button class="velke zelene" id="ano">✅ Věděl jsem</button>';
-      $('#ano').onclick = () => odpovez(true);
-      $('#ne').onclick = () => odpovez(false);
+      $('#ano').onclick = () => { if(Date.now() - t0 > 350) odpovez(true); };
+      $('#ne').onclick = () => { if(Date.now() - t0 > 350) odpovez(false); };
     }
     $('#karta').onclick = e => { if(!e.target.closest('.mluv')) odkryj(); };
     $('#ukaz').onclick = odkryj;
@@ -852,7 +879,7 @@ function spojovani(slova){
     const cas = Math.max(1, Math.round((Date.now()-start)/1000));
     const k = rekKlic(n, hrac, rp), rek = S.rekordy[k];
     const novy = rek==null || cas < rek;
-    if(novy){ S.rekordy[k] = cas; uloz(); }
+    if(novy){ S.rekordy[k] = cas; jeJakub() ? ulozPostup() : uloz(); }
     const pozn = rek==null ? '' : novy ? ' 🏆 <b>Nový rekord!</b>' : ` Tvůj rekord je ${rek} s.`;
     const tab = rekordyText(n, rp);
     vysledek({ hvezd: chyby===0 ? 3 : chyby<=2 ? 2 : 1, rezim: 'spoj', slova,
@@ -870,7 +897,7 @@ function psani(slova){
     if(!fronta.length) return konec();
     const pol = fronta[0], w = pol.w, sl = jeSl(w);
     const zadani = sl ? w.en : w.cz, cilT = sl ? w.cz : w.en, cil = varianty(cilT)[0];   // sloveso: přítomný → napiš minulý
-    let napoveda = 0, vyhodnoceno = false;
+    let napoveda = 0, vyhodnoceno = false, tVyh = 0;
     obrazovka(`${lista(hotovo, celkem)}
       <div class="karta mala">
         <div class="jazyk">${sl ? '🟢 přítomný čas (dnes)' : '🇨🇿 česky'}</div>
@@ -884,7 +911,7 @@ function psani(slova){
       <div class="tlacitka" id="tl"><button class="velke zlute" id="napo">💡 Nápověda</button><button class="velke modre" id="over">Zkontrolovat</button></div>`, 'hra psani');
     const vstup = $('#vstup');
     vstup.focus();
-    vstup.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); vyhodnoceno ? kolo() : over(); } });
+    vstup.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); if(e.repeat) return; if(!vyhodnoceno) over(); else if(Date.now() - tVyh > 350) kolo(); } });
     $('#napo').onclick = () => {
       napoveda = Math.min(cil.length, napoveda+1);
       $('#hint').textContent = cil.split('').map((c,i) => i < napoveda ? c : (c===' ' ? ' ' : '_')).join(' ');
@@ -894,7 +921,7 @@ function psani(slova){
     function over(){
       if(vyhodnoceno) return;
       if(!vstup.value.trim()){ vstup.focus(); return; }
-      vyhodnoceno = true; vstup.readOnly = true;
+      vyhodnoceno = true; tVyh = Date.now(); vstup.readOnly = true;
       fronta.shift();
       if(spravne(vstup.value, cilT)){
         efekt('ok'); vstup.classList.add('ok');
@@ -911,7 +938,7 @@ function psani(slova){
       const gen = generace, veta = sl ? w.en + ', ' + rec(w,'cz') : w.en;
       if(S.zvuk) setTimeout(() => { if(gen===generace && S.zvuk) mluv(veta); }, 250);
       $('#tl').innerHTML = '<button class="velke modre" id="dal">Další →</button>';
-      $('#dal').onclick = kolo;
+      $('#dal').onclick = () => { if(Date.now() - tVyh > 350) kolo(); };
     }
   }
   function konec(){
@@ -943,10 +970,10 @@ function poslech(slova){
   const pool = slova.length >= 4 ? slova : sl ? vsechnaSlovesa() : vsechnaSlova();
   const fronta = vyberDavku(slova, 'en2cz');
   const celkem = fronta.length; let i = 0, spr = 0; const chybna = [];
-  const zvukJde = 'speechSynthesis' in window && S.zvuk;
   function kolo(){
     if(i >= celkem) return konec();
     const w = fronta[i], gen = generace + 1;
+    const zvukJde = 'speechSynthesis' in window && S.zvuk;
     obrazovka(`${lista(i, celkem)}
       <div class="karta mala">
         <div class="jazyk">${sl ? '🎧 Poslouchej sloveso a vyber jeho minulý čas' : '🎧 Poslouchej a vyber, co to znamená'}</div>
@@ -977,7 +1004,7 @@ const dresStyl = k => { const b = KLUBY[k].barvy; return `background:linear-grad
 function penalty(slova, souper){
   if(!souper){
     obrazovka(`<div class="pozdrav mensi">⚽ Proti komu budeš kopat?</div>
-      <div class="kluby">${SOUPERI.map(k => { const r = (S.penalty||{})[k];
+      <div class="kluby">${SOUPERI.map(k => { const r = (S.penalty||{})[(jeSl(slova[0]) ? 'v:' : '') + k];
         return `<button class="klub" data-klub="${k}"><span class="dres" style="${dresStyl(k)}"></span><span>${esc(KLUBY[k].nazev)}</span>${r && r.v ? `<small>🏆 ${r.v}×</small>` : ''}</button>`; }).join('')}</div>
       <div class="legenda stred">${jeSl(slova[0]) ? 'Když kopeš ty, uvidíš minulý čas a vybereš přítomný. Když kope soupeř, chytáš: vyber minulý čas.' : 'Když kopeš ty, vyber anglické slovo. Když kope soupeř, chytáš: vyber český překlad.'}</div>`, 'hra');
     main.querySelectorAll('[data-klub]').forEach(b => b.onclick = () => penalty(slova, b.dataset.klub));
@@ -1046,8 +1073,8 @@ function penalty(slova, souper){
   function konec(){
     const a = goly(ja), b = goly(on);
     if(jeJakub()){
-      const r = S.penalty[souper] = S.penalty[souper] || { v:0, r:0, p:0 };
-      r[a > b ? 'v' : a === b ? 'r' : 'p']++; uloz();
+      const pk = (sl ? 'v:' : '') + souper, r = S.penalty[pk] = S.penalty[pk] || { v:0, r:0, p:0 };
+      r[a > b ? 'v' : a === b ? 'r' : 'p']++; ulozPostup();
     }
     let hvezd = hvezdyZPomeru(spr/celkem);
     if(a > b) hvezd = Math.max(2, hvezd);
@@ -1129,9 +1156,10 @@ function slovesaDomov(){
     </div>
     <div class="odkazy"><button class="odkaz" id="slSeznam">📖 Seznam sloves s výslovností</button></div>
   `, 'domov2');
-  main.querySelectorAll('[data-sk]').forEach(b => b.onclick = () => { S.slSk = b.dataset.sk === '*' ? null : Number(b.dataset.sk); uloz(false); slovesaDomov(); });
+  main.querySelectorAll('[data-sk]').forEach(b => b.onclick = () => { S.slSk = b.dataset.sk === '*' ? null : Number(b.dataset.sk); ulozMistne(); slovesaDomov(); });
   main.querySelectorAll('[data-rezim]').forEach(b => b.onclick = () => spust(b.dataset.rezim, vybranaSlovesa()));
   $('#slSeznam').onclick = seznamSloves;
+  znovaFn = slovesaDomov;
 }
 function seznamSloves(){
   const slova = vybranaSlovesa();
@@ -1144,6 +1172,7 @@ function seznamSloves(){
     <button class="odkaz" id="zpetSl">← Zpět na slovesa</button>
   </div>`, 'seznam-obr');
   $('#zpetSl').onclick = slovesaDomov;
+  znovaFn = seznamSloves;
 }
 
 /* ---------- přehled tréninku po dnech ---------- */
@@ -1159,6 +1188,7 @@ function prehled(){
     <table><thead><tr><th>Den</th><th>Čas</th><th>Her</th><th></th></tr></thead><tbody>${dny.map(d => radek(h,d)).join('')}</tbody></table>`).join('')}
     <div class="legenda">Čas se počítá jen ve hře, když se na displeji něco děje. ✅ = aspoň 10 minut, 🟡 = méně.</div>
   </div>`, 'seznam-obr');
+  znovaFn = prehled;
 }
 
 /* =====================================================================
@@ -1175,60 +1205,89 @@ const FIREBASE_CONFIG = {
 };
 const cloudMozne = () => !!(FIREBASE_CONFIG || window.__cloudFake);
 const CLOUD_POLE = ['slova','hvezdy','rekordy','dny','penalty','cas','hry','upd'];
-let cloudDb = null, cloudTimer = null, cloudStav = '';
+let cloudDb = null, cloudTimer = null, cloudStav = '', cloudBezi = null, cloudZnovu = false, cloudNovy = false;
 function skript(src){ return new Promise((ok, chyba) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = chyba; document.head.appendChild(s); }); }
 async function cloudPripoj(){
   if(window.__cloudFake) return window.__cloudFake;
   if(cloudDb) return cloudDb;
   if(!FIREBASE_CONFIG || !navigator.onLine) return null;
   try {
-    if(!window.firebase){
-      await skript('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
-      await skript('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js');
-    }
+    if(!window.firebase) await skript('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
+    if(!firebase.firestore) await skript('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js');
     if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     const fs = firebase.firestore();
     cloudDb = {
-      nacti: async kod => { const d = await fs.collection('rodiny').doc(kod).get(); return d.exists ? d.data() : null; },
-      uloz: async (kod, data) => { await fs.collection('rodiny').doc(kod).set(data); },
+      // přečíst → sloučit → zapsat v jedné transakci, aby si dvě zařízení nepřepsala data pod rukama
+      transakce: (kod, krok) => fs.runTransaction(async t => {
+        const ref = fs.collection('rodiny').doc(kod), d = await t.get(ref);
+        const ven = krok(d.exists ? d.data() : null);
+        if(ven) t.set(ref, ven);
+      }),
     };
     return cloudDb;
-  } catch(e){ cloudStav = 'nejde se připojit'; return null; }
+  } catch(e){ return null; }
 }
-const cloudData = () => { const o = {}; for(const k of CLOUD_POLE) o[k] = S[k]; return JSON.parse(JSON.stringify(o)); };
-/* sloučení: novější stav vyhrává, čas a počet her po dnech se berou větší z obou */
+const cloudData = (z = S) => { const o = {}; for(const k of CLOUD_POLE) o[k] = z[k]; return JSON.parse(JSON.stringify(o)); };
+const kanon = x => x && typeof x === 'object' ? (Array.isArray(x) ? '[' + x.map(kanon).join(',') + ']' : '{' + Object.keys(x).sort().map(k => JSON.stringify(k) + ':' + kanon(x[k])).join(',') + '}') : JSON.stringify(x);
+const jeCizi = k => k.includes('|');                      // rekord Elly nebo rodiče (Jakubovy klíče svislítko nemají)
+const maPostup = d => d.hvezdy > 0 || Object.keys(d.slova).length > 0 || !!d.dny;
+function slucDny(a, b){                                   // čas a počty her: po dnech větší z obou
+  const ven = {};
+  for(const h of new Set([...Object.keys(a), ...Object.keys(b)])){
+    const x = a[h] || {}, y = b[h] || {}; ven[h] = {};
+    for(const den of new Set([...Object.keys(x), ...Object.keys(y)])) ven[h][den] = Math.max(x[den] || 0, y[den] || 0);
+  }
+  return ven;
+}
+/* Sloučení se stavem z internetu:
+   – Jakubův postup (slovíčka, hvězdičky, série, penalty, jeho rekordy) bere celý z té strany, kde se naposledy
+     opravdu změnil (`upd`); prázdné zařízení nikdy nevyhraje
+   – rekordy ostatních: lepší čas z obou; čas a počty her: po dnech větší z obou
+   Vrací, jestli se změnil místní stav a jestli má místní stav něco, co na internetu chybí. */
 function cloudSluc(c){
   c = oprav(c);
-  const novejsi = c.upd > S.upd;
-  if(novejsi) for(const k of ['slova','hvezdy','rekordy','dny','penalty']) S[k] = c[k];
-  for(const pole of ['cas','hry']) for(const h of new Set([...Object.keys(c[pole]), ...Object.keys(S[pole])])){
-    const a = S[pole][h] || {}, b = c[pole][h] || {}, out = {};
-    for(const den of new Set([...Object.keys(a), ...Object.keys(b)])) out[den] = Math.max(a[den]||0, b[den]||0);
-    S[pole][h] = out;
+  const pred = kanon(cloudData());
+  if((maPostup(c) ? c.upd : 0) > (maPostup(S) ? S.upd : 0)){
+    const cizi = Object.entries(S.rekordy).filter(([k]) => jeCizi(k));
+    for(const k of ['slova','hvezdy','dny','penalty']) S[k] = c[k];
+    S.rekordy = Object.fromEntries([...Object.entries(c.rekordy).filter(([k]) => !jeCizi(k)), ...cizi]);
+    S.upd = c.upd;
   }
-  if(novejsi) S.upd = c.upd;
-  return novejsi;
+  for(const [k, v] of Object.entries(c.rekordy)) if(jeCizi(k) && (S.rekordy[k] == null || v < S.rekordy[k])) S.rekordy[k] = v;
+  S.cas = slucDny(S.cas, c.cas); S.hry = slucDny(S.hry, c.hry);
+  const po = kanon(cloudData());
+  return { zmena: po !== pred, nahrat: po !== kanon(cloudData(c)) };
 }
-async function cloudStahni(){
-  if(!S.rodina) return;
-  const db = await cloudPripoj(); if(!db) return;
-  try {
-    const c = await db.nacti(S.rodina);
-    if(c){ const zmena = cloudSluc(c); try { localStorage.setItem(KLIC, JSON.stringify(S)); } catch(e){} if(zmena && main.className==='domov') domov(); }
-    else await db.uloz(S.rodina, cloudData());
-    cloudStav = 'synchronizováno ' + new Date().toLocaleTimeString('cs', {hour:'2-digit', minute:'2-digit'});
-  } catch(e){ cloudStav = 'nejde se připojit'; }
+const cloudCas = () => new Date().toLocaleTimeString('cs', { hour:'2-digit', minute:'2-digit' });
+async function cloudSync(){
+  if(!S.rodina || !cloudMozne()) return;
+  if(cloudBezi){ cloudZnovu = true; return cloudBezi; }
+  cloudBezi = (async () => {
+    const db = await cloudPripoj();
+    if(!db){ cloudStav = 'nejde se připojit'; return; }
+    try {
+      let zmena = false, novy = false;
+      const krok = c => {
+        if(!c){ novy = true; return cloudData(); }
+        novy = false;
+        const r = cloudSluc(c); zmena = zmena || r.zmena;
+        return r.nahrat ? cloudData() : null;
+      };
+      if(db.transakce) await db.transakce(S.rodina, krok);
+      else { const ven = krok(await db.nacti(S.rodina)); if(ven) await db.uloz(S.rodina, ven); }   // jen pro testy
+      ulozMistne(); cloudNovy = novy;
+      cloudStav = 'synchronizováno ' + cloudCas();
+      if(zmena) prekresli();
+    } catch(e){ cloudStav = 'nejde se připojit'; }
+  })();
+  try { await cloudBezi; } finally { cloudBezi = null; if(cloudZnovu){ cloudZnovu = false; cloudNaplanuj(); } }
 }
 function cloudNaplanuj(){
   if(!S.rodina || !cloudMozne()) return;
   clearTimeout(cloudTimer);
-  cloudTimer = setTimeout(async () => {
-    const db = await cloudPripoj(); if(!db) return;
-    try { await db.uloz(S.rodina, cloudData()); cloudStav = 'uloženo ' + new Date().toLocaleTimeString('cs', {hour:'2-digit', minute:'2-digit'}); }
-    catch(e){ cloudStav = 'uložení se nepovedlo'; }
-  }, 2500);
+  cloudTimer = setTimeout(cloudSync, 2500);
 }
-window.addEventListener('online', () => { cloudStahni(); cloudNaplanuj(); });
+window.addEventListener('online', cloudSync);
 function cloudObrazovka(){
   obrazovka(`<div class="karta mala cloudKarta">
     <div class="jazyk">☁️ Ukládání na internet</div>
@@ -1236,17 +1295,21 @@ function cloudObrazovka(){
     <input id="kod" class="vstup" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" value="${esc(S.rodina||'')}" placeholder="rodinný kód">
     <div class="zprava" id="cloudZprava">${S.rodina ? esc(cloudStav || 'zapnuto') : ''}</div>
     <div class="tlacitka"><button class="velke zelene" id="zapni">${S.rodina ? 'Uložit kód' : 'Zapnout'}</button>${S.rodina ? '<button class="velke cervene" id="vypni">Vypnout</button>' : ''}</div>
-  </div>`, 'hra');
+  </div>`, 'nastaveni');
   $('#zapni').onclick = async () => {
     const kod = $('#kod').value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-]/g, '');
     if(kod.length < 6){ $('#cloudZprava').textContent = 'Kód musí mít aspoň 6 písmen nebo číslic (bez háčků).'; return; }
-    S.rodina = kod; uloz(false); $('#cloudZprava').textContent = 'Připojuji…';
-    await cloudStahni(); $('#cloudZprava').textContent = cloudStav || 'zapnuto';
-    setTimeout(domov, 900);
+    S.rodina = kod; ulozMistne(); $('#cloudZprava').textContent = 'Připojuji…';
+    cloudStav = ''; await cloudSync();
+    const z = $('#cloudZprava'); if(!z) return;
+    if(!cloudStav.startsWith('synchron')){ z.textContent = 'Nejde se připojit. Zkontroluj internet, kód zůstane uložený a zkusí se to znovu.'; return; }
+    z.textContent = cloudNovy ? `Založen nový rodinný kód „${kod}“. Na dalších zařízeních zadej přesně ten samý.`
+      : `Připojeno k postupu rodiny „${kod}“: ⭐ ${S.hvezdy}, slovíček s postupem ${Object.keys(S.slova).length}.`;
+    $('#zapni').textContent = 'Hotovo'; $('#zapni').onclick = domov;
   };
-  if($('#vypni')) $('#vypni').onclick = () => { S.rodina = null; uloz(false); domov(); };
+  if($('#vypni')) $('#vypni').onclick = () => { S.rodina = null; ulozMistne(); domov(); };
 }
-if(S.rodina) cloudStahni();
+if(S.rodina) cloudSync();
 
 /* ---------- seznam slovíček a postup ---------- */
 function seznam(){
@@ -1278,8 +1341,11 @@ function seznam(){
   $('#obnov').onclick = e => {
     let d; try { d = zalohaCti($('#vloz').value); } catch(err){ return hlas('Tohle nevypadá jako kód zálohy.', false); }
     if(!potvrditObnovu){ potvrditObnovu = true; e.target.textContent = 'Opravdu přepsat postup? Ťukni znovu'; return; }
+    // nastavení tohoto zařízení (rodinný kód, zvuk, lekce) zůstává; čas a počty her se sloučí
+    const drz = { rodina: S.rodina, zvuk: S.zvuk, sady: S.sady, slSk: S.slSk, domaci: S.domaci, v: S.v };
+    const cas = slucDny(S.cas, d.cas), hry = slucDny(S.hry, d.hry);
     for(const k of Object.keys(S)) delete S[k];
-    Object.assign(S, VYCHOZI(), d); uloz(); seznam();
+    Object.assign(S, VYCHOZI(), d, drz, { cas, hry }); ulozPostup(); seznam();
     $('#zalPanel').hidden = false; $('#kod').value = zalohaKod();
     const z = $('#zalZprava'); z.textContent = 'Postup obnoven ✅'; z.style.color = 'var(--zelena)';
   };
@@ -1292,7 +1358,8 @@ function seznam(){
       setTimeout(() => { if(e.target.isConnected){ potvrdit = false; e.target.textContent = 'Vynulovat postup'; e.target.style.color = ''; } }, 4000);
       return;
     }
-    S.slova = {}; S.rekordy = {}; uloz(); seznam();
+    S.slova = {}; for(const k of Object.keys(S.rekordy)) if(!jeCizi(k)) delete S.rekordy[k];   // rekordy Elly a rodičů zůstávají
+    ulozPostup(); seznam();
   };
 }
 
