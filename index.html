@@ -229,6 +229,12 @@ main.penalty{gap:14px}
   -webkit-user-select:text;user-select:text;word-break:break-all}
 .zaloha .velke{align-self:center}
 
+.rezim.slovesa{background:linear-gradient(135deg,#6d28d9,#a855f7);color:#fff;box-shadow:0 6px 0 #4c1d95}
+.rezim.slovesa small{color:#ede9fe}
+.vyznam{font-size:clamp(17px,2.6vmin,22px);color:var(--muted);font-weight:700;text-align:center;margin-top:-4px}
+.seznam td.minuly{font-weight:800;color:#7c3aed}
+.seznam td small{font-size:13px;color:var(--muted);font-weight:600}
+@media (min-width:900px){ .rezimy.tri{grid-template-columns:repeat(3,minmax(0,1fr));width:min(860px,100%)} }
 .odkazy{display:flex;flex-wrap:wrap;justify-content:center;gap:0 6px}
 .serie.cas{color:#1d4ed8;background:#eff6ff}
 .serie.cas b{color:#1e3a8a}
@@ -457,19 +463,49 @@ const FOTBALISTE = [
   ['Lautaro Martínez', 'inter', 'ar'],
   ['Lionel Messi', 'miami', 'ar'], ['Cristiano Ronaldo', 'nassr', 'pt'],
 ].map(([jm, klub, zeme]) => ({ jm, klub, zeme }));
+/* =====================================================================
+   SLOVESA — přítomný a minulý čas (nepravidelná slovesa z pracovních listů).
+   Formát: ['přítomný', 'minulý', 'česky', výslovnost minulého (jen když se
+   čte jinak, než se píše), poznámka]. Po 12 slovesech je nová část.
+   ===================================================================== */
+const SLOVESA = [
+  ['be', 'was / were', 'být'], ['have', 'had', 'mít'], ['do', 'did', 'dělat'], ['get', 'got', 'dostat'],
+  ['see', 'saw', 'vidět'], ['eat', 'ate', 'jíst'], ['drink', 'drank', 'pít'], ['give', 'gave', 'dát'],
+  ['find', 'found', 'najít'], ['know', 'knew', 'vědět / znát'], ['think', 'thought', 'myslet'], ['put', 'put', 'položit / dát'],
+
+  ['buy', 'bought', 'koupit'], ['bring', 'brought', 'přinést'], ['write', 'wrote', 'psát'],
+  ['read', 'read', 'číst', 'red', 'píše se stejně, čte se „red“'],
+  ['draw', 'drew', 'kreslit'], ['hear', 'heard', 'slyšet'], ['sit', 'sat', 'sedět'], ['sleep', 'slept', 'spát'],
+  ['run', 'ran', 'běžet'], ['swim', 'swam', 'plavat'], ['fly', 'flew', 'letět'], ['catch', 'caught', 'chytit'],
+
+  ['break', 'broke', 'rozbít'], ['choose', 'chose', 'vybrat'], ['lose', 'lost', 'ztratit / prohrát'], ['grow', 'grew', 'růst'],
+  ['fall', 'fell', 'spadnout'], ['drive', 'drove', 'řídit'], ['ride', 'rode', 'jezdit'], ['hide', 'hid', 'schovat (se)'],
+  ['feed', 'fed', 'krmit'], ['freeze', 'froze', 'mrznout / zmrazit'], ['hold', 'held', 'držet'], ['shake', 'shook', 'třást'],
+];
+function vsechnaSlovesa(){
+  return SLOVESA.map(([en, cz, vyznam, vyslov, pozn], i) =>
+    ({ id: 'sloveso|'+en, en, cz, vyznam, vyslov, pozn, sloveso: true, sada: 'slovesa', sk: Math.floor(i/12) }));
+}
+function vybranaSlovesa(){ const v = vsechnaSlovesa(); return S.slSk == null ? v : v.filter(w => w.sk === S.slSk); }
+/* slovesa používají stejné hry jako slovíčka: `en` = přítomný tvar, `cz` = minulý tvar */
+const jeSl = w => !!(w && w.sloveso);
+const rec = (w, strana) => strana === 'en' ? w.en : jeSl(w) ? (w.vyslov || w.cz) : '';
+const popisky = slova => jeSl(slova[0]) ? { en: '🟢 přítomný čas (dnes)', cz: '🔴 minulý čas (včera)' } : { en: '🇬🇧 anglicky', cz: '🇨🇿 česky' };
+
 /* soupeři v penaltách */
 const SOUPERI = ['real', 'barca', 'atleti', 'bayern', 'city', 'liverpool', 'arsenal', 'psg', 'inter'];
 
 /* ---------- uložený postup ---------- */
 const KLIC = 'jakub-slovicka-v1';
 function nacti(){ try { return JSON.parse(localStorage.getItem(KLIC)) || {}; } catch(e){ return {}; } }
-const VYCHOZI = () => ({ slova:{}, hvezdy:0, sady:null, zvuk:true, rekordy:{}, dny:null, penalty:{}, cas:{}, hry:{}, rodina:null, upd:0 });
+const VYCHOZI = () => ({ slova:{}, hvezdy:0, sady:null, zvuk:true, rekordy:{}, dny:null, penalty:{}, cas:{}, hry:{}, rodina:null, upd:0, slSk:null });
 const obj = x => x && typeof x==='object' && !Array.isArray(x) ? x : {};
 /* uložený stav a záloha můžou být poškozené nebo ze staré verze – vždycky doplnit správný tvar */
 function oprav(d){ d = obj(d); return { slova: obj(d.slova), hvezdy: Number(d.hvezdy)||0,
   sady: Array.isArray(d.sady) ? d.sady : null, zvuk: d.zvuk !== false, rekordy: obj(d.rekordy),
   dny: d.dny && typeof d.dny==='object' ? d.dny : null, penalty: obj(d.penalty), cas: obj(d.cas), hry: obj(d.hry),
-  rodina: typeof d.rodina==='string' && d.rodina ? d.rodina : null, upd: Number(d.upd)||0 }; }
+  rodina: typeof d.rodina==='string' && d.rodina ? d.rodina : null, upd: Number(d.upd)||0,
+  slSk: [0,1,2].includes(d.slSk) ? d.slSk : null }; }
 const S = oprav(nacti());
 /* uloz(false) = jen místní nastavení (zvuk, lekce, kód) – nezmění čas poslední změny postupu */
 function uloz(postup=true){ if(postup) S.upd = Date.now(); try { localStorage.setItem(KLIC, JSON.stringify(S)); } catch(e){} if(postup) cloudNaplanuj(); }
@@ -478,10 +514,11 @@ function uloz(postup=true){ if(postup) S.upd = Date.now(); try { localStorage.se
 const HRACI = { jakub:{ jm:'Jakub', ik:'👦', osl:'Jakube' }, ella:{ jm:'Ella', ik:'👧', osl:'Ello' }, tata:{ jm:'Táta', ik:'👨', osl:'tati' }, mama:{ jm:'Máma', ik:'👩', osl:'mami' } };
 let hrac = 'jakub';
 const jeJakub = () => hrac === 'jakub';
-const rekKlic = (n, h=hrac) => h==='jakub' ? 'spoj'+n : h+'|spoj'+n;
-function rekordyText(n){
-  return Object.keys(HRACI).filter(h => S.rekordy[rekKlic(n,h)] != null)
-    .map(h => `${HRACI[h].ik} ${S.rekordy[rekKlic(n,h)]} s`).join(' · ');
+/* p = '' slovíčka, 'v' slovesa (vlastní rekordy) */
+const rekKlic = (n, h=hrac, p='') => (h==='jakub' ? '' : h+'|') + p + 'spoj' + n;
+function rekordyText(n, p=''){
+  return Object.keys(HRACI).filter(h => S.rekordy[rekKlic(n,h,p)] != null)
+    .map(h => `${HRACI[h].ik} ${S.rekordy[rekKlic(n,h,p)]} s`).join(' · ');
 }
 
 /* ---------- série dní ---------- */
@@ -620,8 +657,9 @@ function konfety(){
 let timerId = null, generace = 0;
 function obrazovka(html, trida=''){
   clearInterval(timerId); generace++;
-  if(trida==='domov' && vHre()) uloz();
+  if(/^domov/.test(trida) && vHre()) uloz();
   main.className = trida; main.innerHTML = html;
+  main.scrollTop = 0;   // nová obrazovka vždy od začátku (na telefonu se jinak otevřela odrolovaná)
   $('#domu').hidden = trida==='domov';
   $('#hvezdy').textContent = '⭐ ' + S.hvezdy;
   $('#zvuk').textContent = S.zvuk ? '🔊' : '🔇';
@@ -656,11 +694,13 @@ function domov(){
       <button class="rezim" data-rezim="psani"><span class="ik">✏️</span><span><b>Psaní</b><br><small>Napiš slovo anglicky</small></span></button>
       <button class="rezim" data-rezim="poslech"><span class="ik">🎧</span><span><b>Poslech</b><br><small>Poslechni si slovo a vyber překlad</small></span></button>
       <button class="rezim fotbal" data-rezim="penalty"><span class="ik">⚽🥅</span><span><b>Penalty</b><br><small>Správná odpověď = gól</small></span></button>
-      <button class="rezim fotbal siroky" data-rezim="kviz"><span class="ik">🏟️</span><span><b>Fotbalový kvíz</b><br><small>Who does Lamine Yamal play for?</small></span></button>
+      <button class="rezim fotbal" data-rezim="kviz"><span class="ik">🏟️</span><span><b>Fotbalový kvíz</b><br><small>Who does Lamine Yamal play for?</small></span></button>
+      <button class="rezim slovesa" id="slovesa"><span class="ik">🕰️</span><span><b>Slovesa: minulý čas</b><br><small>see → saw, eat → ate</small></span></button>
     </div>
     <div class="odkazy"><button class="odkaz" id="seznam">📖 Všechna slovíčka a postup</button><button class="odkaz" id="prehled">📈 Přehled tréninku</button>${cloudMozne() ? `<button class="odkaz" id="cloud">${S.rodina ? '☁️ Ukládání: zapnuto' : '☁️ Ukládání na internet'}</button>` : ''}</div>
   `, 'domov');
   $('#prehled').onclick = prehled;
+  $('#slovesa').onclick = slovesaDomov;
   if($('#cloud')) $('#cloud').onclick = cloudObrazovka;
   main.querySelectorAll('[data-hrac]').forEach(b => b.onclick = () => { hrac = b.dataset.hrac; domov(); });
   main.querySelectorAll('[data-sada]').forEach(b => b.onclick = () => {
@@ -694,21 +734,21 @@ function vysledek({ hvezd, text, chybna=[], rezim, slova, nadpis, znovu, opakova
     <div class="hvezdicky">${'⭐'.repeat(hvezd)}<span class="seda">${'⭐'.repeat(3-hvezd)}</span></div>
     <h2>${nadpis}</h2>
     <p>${text}</p>
-    ${chybna.length ? `<div class="chybna"><div class="mal">Tahle si ještě zopakuj:</div>${chybna.map(w=>`<span class="cip">${esc(w.en)} = ${esc(w.cz)}</span>`).join('')}</div>` : ''}
+    ${chybna.length ? `<div class="chybna"><div class="mal">Tahle si ještě zopakuj:</div>${chybna.map(w=>`<span class="cip">${esc(w.en)} ${jeSl(w) ? '→' : '='} ${esc(w.cz)}</span>`).join('')}</div>` : ''}
     <div class="tlacitka">
       ${chybna.length && opakovatChybna ? '<button class="velke cervene" id="chyb">🔁 Jen chybná</button>' : ''}
       <button class="velke modre" id="znovu">Hrát znovu</button>
-      <button class="velke zelene" id="dom">🏠 Domů</button>
+      <button class="velke zelene" id="dom">${slova && jeSl(slova[0]) ? '🕰️ Slovesa' : '🏠 Domů'}</button>
     </div></div>`, 'konec');
   if(chybna.length && opakovatChybna) $('#chyb').onclick = () => spust(rezim, chybna);
   $('#znovu').onclick = znovu || (() => spust(rezim, slova));
-  $('#dom').onclick = domov;
+  $('#dom').onclick = slova && jeSl(slova[0]) ? slovesaDomov : domov;
 }
 const hvezdyZPomeru = p => p >= 0.9 ? 3 : p >= 0.7 ? 2 : 1;
 
 /* ---------- kartičky: ukáže se slovo, Jakub řekne překlad nahlas ---------- */
 function karticky(smer, slova){
-  const zEn = smer==='en2cz';
+  const zEn = smer==='en2cz', L = popisky(slova);
   const fronta = vyberDavku(slova, smer).map(w=>({ w, pokus:0 }));
   const celkem = fronta.length; let hotovo = 0;
   const napoprve = [], chybna = [];
@@ -717,25 +757,29 @@ function karticky(smer, slova){
     if(!fronta.length) return konec();
     const { w } = fronta[0];
     const otazka = zEn ? w.en : w.cz, odpoved = zEn ? w.cz : w.en;
+    const recO = rec(w, zEn ? 'en' : 'cz'), recA = rec(w, zEn ? 'cz' : 'en');   // co se dá přečíst nahlas
+    const tlMluv = t => t ? `<button class="mluv" data-mluv="${esc(t)}" aria-label="Přečíst">🔊</button>` : '';
     obrazovka(`${lista(hotovo, celkem)}
       <div class="karta" id="karta">
-        <div class="jazyk">${zEn ? '🇬🇧 anglicky' : '🇨🇿 česky'}</div>
+        <div class="jazyk">${zEn ? L.en : L.cz}</div>
         <div class="slovo${otazka.length>12?' dlouhe':''}">${esc(otazka)}</div>
-        ${zEn ? `<button class="mluv" data-mluv="${esc(w.en)}" aria-label="Přečíst">🔊</button>` : ''}
+        ${jeSl(w) ? `<div class="vyznam">${esc(w.vyznam)}</div>` : ''}
+        ${tlMluv(recO)}
         <div class="odpoved" id="odp" hidden>
-          <div class="jazyk">${zEn ? '🇨🇿 česky' : '🇬🇧 anglicky'}</div>
+          <div class="jazyk">${zEn ? L.cz : L.en}</div>
           <div class="slovo2${odpoved.length>12?' dlouhe':''}">${esc(odpoved)}</div>
-          ${zEn ? '' : `<button class="mluv" data-mluv="${esc(w.en)}" aria-label="Přečíst">🔊</button>`}
+          ${jeSl(w) && w.pozn ? `<div class="vyznam">${esc(w.pozn)}</div>` : ''}
+          ${tlMluv(recA)}
         </div>
         <div class="tukni" id="tukni">Řekni to nahlas a pak ťukni 👆</div>
       </div>
       <div class="tlacitka" id="tl"><button class="velke modre" id="ukaz">Ukázat odpověď</button></div>`, 'hra');
-    if(zEn && S.zvuk) mluv(w.en);
+    if(recO && S.zvuk) mluv(recO);
     let odkryto = false;
     function odkryj(){
       if(odkryto) return; odkryto = true;
       $('#odp').hidden = false; $('#tukni').remove();
-      if(!zEn && S.zvuk) mluv(w.en);
+      if(recA && S.zvuk) mluv(recA);
       $('#tl').innerHTML = '<button class="velke cervene" id="ne">❌ Nevěděl jsem</button><button class="velke zelene" id="ano">✅ Věděl jsem</button>';
       $('#ano').onclick = () => odpovez(true);
       $('#ne').onclick = () => odpovez(false);
@@ -766,20 +810,20 @@ function karticky(smer, slova){
 
 /* ---------- spojování ---------- */
 function spojovani(slova){
-  const n = Math.min(6, slova.length);
+  const n = Math.min(6, slova.length), rp = jeSl(slova[0]) ? 'v' : '';
   const vyber = zamichej(slova).slice(0, n);
   let vybrano = null, chyby = 0, zbyva = n;
   obrazovka(`<div class="info"><span>⏱ <b id="cas">0</b> s</span><span>❌ <b id="chyby">0</b></span></div>
     <div class="spoj">
-      <div class="sloupec">${zamichej(vyber).map(w=>`<button class="dlazdice" data-id="${esc(w.id)}" data-strana="en">${esc(w.en)}</button>`).join('')}</div>
-      <div class="sloupec">${zamichej(vyber).map(w=>`<button class="dlazdice cz" data-id="${esc(w.id)}" data-strana="cz">${esc(w.cz)}</button>`).join('')}</div>
+      <div class="sloupec">${zamichej(vyber).map(w=>`<button class="dlazdice" data-id="${esc(w.id)}" data-strana="en" data-rec="${esc(rec(w,'en'))}">${esc(w.en)}</button>`).join('')}</div>
+      <div class="sloupec">${zamichej(vyber).map(w=>`<button class="dlazdice cz" data-id="${esc(w.id)}" data-strana="cz" data-rec="${esc(rec(w,'cz'))}">${esc(w.cz)}</button>`).join('')}</div>
     </div>`, 'hra');
   const gen = generace, start = Date.now();
   timerId = setInterval(() => { const c = $('#cas'); if(c) c.textContent = Math.floor((Date.now()-start)/1000); }, 250);
   main.querySelectorAll('.dlazdice').forEach(b => b.onclick = () => {
     if(b.classList.contains('hotovo')) return;
     const strana = b.dataset.strana;
-    if(strana==='en' && S.zvuk) mluv(b.textContent);
+    if(b.dataset.rec && S.zvuk) mluv(b.dataset.rec);
     if(!vybrano || vybrano.dataset.strana===strana){
       if(vybrano) vybrano.classList.remove('vybrano');
       if(vybrano===b){ vybrano = null; return; }
@@ -797,11 +841,11 @@ function spojovani(slova){
   function konec(){
     clearInterval(timerId);
     const cas = Math.max(1, Math.round((Date.now()-start)/1000));
-    const k = rekKlic(n), rek = S.rekordy[k];
+    const k = rekKlic(n, hrac, rp), rek = S.rekordy[k];
     const novy = rek==null || cas < rek;
     if(novy){ S.rekordy[k] = cas; uloz(); }
     const pozn = rek==null ? '' : novy ? ' 🏆 <b>Nový rekord!</b>' : ` Tvůj rekord je ${rek} s.`;
-    const tab = rekordyText(n);
+    const tab = rekordyText(n, rp);
     vysledek({ hvezd: chyby===0 ? 3 : chyby<=2 ? 2 : 1, rezim: 'spoj', slova,
       text: `Čas <b>${cas} s</b>, chyb <b>${chyby}</b>.${pozn}${tab ? `<br><span class="tabulka">🏆 Rekordy: ${tab}</span>` : ''}` });
   }
@@ -815,13 +859,15 @@ function psani(slova){
 
   function kolo(){
     if(!fronta.length) return konec();
-    const pol = fronta[0], w = pol.w, cil = varianty(w.en)[0];
+    const pol = fronta[0], w = pol.w, sl = jeSl(w);
+    const zadani = sl ? w.en : w.cz, cilT = sl ? w.cz : w.en, cil = varianty(cilT)[0];   // sloveso: přítomný → napiš minulý
     let napoveda = 0, vyhodnoceno = false;
     obrazovka(`${lista(hotovo, celkem)}
       <div class="karta mala">
-        <div class="jazyk">🇨🇿 česky</div>
-        <div class="slovo">${esc(w.cz)}</div>
-        <div class="jazyk">Napiš anglicky:</div>
+        <div class="jazyk">${sl ? '🟢 přítomný čas (dnes)' : '🇨🇿 česky'}</div>
+        <div class="slovo">${esc(zadani)}</div>
+        ${sl ? `<div class="vyznam">${esc(w.vyznam)}</div>` : ''}
+        <div class="jazyk">${sl ? 'Napiš minulý čas (včera):' : 'Napiš anglicky:'}</div>
         <input id="vstup" class="vstup" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="done">
         <div class="hint" id="hint"></div>
         <div class="zprava" id="zprava"></div>
@@ -841,19 +887,20 @@ function psani(slova){
       if(!vstup.value.trim()){ vstup.focus(); return; }
       vyhodnoceno = true; vstup.readOnly = true;
       fronta.shift();
-      if(spravne(vstup.value, w.en)){
+      if(spravne(vstup.value, cilT)){
         efekt('ok'); vstup.classList.add('ok');
         $('#zprava').innerHTML = '✅ Správně!';
         if(pol.pokus===0 && napoveda===0){ napoprve.push(w); setBox(w, 'psani', Math.min(5, box(w,'psani')+1)); }
         hotovo++;
       } else {
         efekt('spatne'); vstup.classList.add('chyba');
-        $('#zprava').innerHTML = `<s>${esc(vstup.value.trim())}</s> → správně je <b>${esc(w.en)}</b>`;
+        $('#zprava').innerHTML = `<s>${esc(vstup.value.trim())}</s> → správně je <b>${esc(cilT)}</b>`;
         if(pol.pokus===0){ chybna.push(w); setBox(w, 'psani', 1); }
         if(pol.pokus < 2) fronta.splice(Math.min(3, fronta.length), 0, { w, pokus: pol.pokus+1 });
         else hotovo++;
       }
-      const gen = generace; if(S.zvuk) setTimeout(() => { if(gen===generace && S.zvuk) mluv(w.en); }, 250);
+      const gen = generace, veta = sl ? w.en + ', ' + rec(w,'cz') : w.en;
+      if(S.zvuk) setTimeout(() => { if(gen===generace && S.zvuk) mluv(veta); }, 250);
       $('#tl').innerHTML = '<button class="velke modre" id="dal">Další →</button>';
       $('#dal').onclick = kolo;
     }
@@ -883,7 +930,8 @@ const tlacitkaMoznosti = (texty, obsah = t => esc(t)) =>
 
 /* ---------- poslech: zazní anglicky, Jakub vybere český překlad ---------- */
 function poslech(slova){
-  const pool = slova.length >= 4 ? slova : vsechnaSlova();
+  const sl = jeSl(slova[0]);
+  const pool = slova.length >= 4 ? slova : sl ? vsechnaSlovesa() : vsechnaSlova();
   const fronta = vyberDavku(slova, 'en2cz');
   const celkem = fronta.length; let i = 0, spr = 0; const chybna = [];
   const zvukJde = 'speechSynthesis' in window && S.zvuk;
@@ -892,18 +940,20 @@ function poslech(slova){
     const w = fronta[i], gen = generace + 1;
     obrazovka(`${lista(i, celkem)}
       <div class="karta mala">
-        <div class="jazyk">🎧 Poslouchej a vyber, co to znamená</div>
+        <div class="jazyk">${sl ? '🎧 Poslouchej sloveso a vyber jeho minulý čas' : '🎧 Poslouchej a vyber, co to znamená'}</div>
         <button class="mluv obri" data-mluv="${esc(w.en)}" aria-label="Pustit znovu">🔊</button>
         <div class="tukni">${zvukJde ? 'Ťukni na 🔊 a poslechni si to znovu' : 'Zvuk je vypnutý, tak si to přečti:'}</div>
         <div class="slovo2" id="napsane" ${zvukJde ? 'hidden' : ''}>${esc(w.en)}</div>
+        <div class="vyznam" id="dovetek" hidden>${sl ? '→ ' + esc(w.cz) + ' · ' + esc(w.vyznam) : ''}</div>
       </div>
       ${tlacitkaMoznosti(moznosti(w, 'cz', pool, 4))}`, 'hra');
     if(zvukJde) mluv(w.en);
     vyberMoznost(w.cz, ok => {
-      $('#napsane').hidden = false;
+      $('#napsane').hidden = false; if(sl) $('#dovetek').hidden = false;
       if(ok){ spr++; efekt('ok'); } else { chybna.push(w); efekt('spatne'); }
+      if(sl && zvukJde) setTimeout(() => { if(gen === generace && S.zvuk) mluv(rec(w,'cz')); }, 350);
       i++;
-      setTimeout(() => { if(gen === generace) kolo(); }, ok ? 1100 : 2400);
+      setTimeout(() => { if(gen === generace) kolo(); }, (ok ? 1100 : 2400) + (sl ? 700 : 0));
     });
   }
   function konec(){
@@ -920,12 +970,13 @@ function penalty(slova, souper){
     obrazovka(`<div class="pozdrav mensi">⚽ Proti komu budeš kopat?</div>
       <div class="kluby">${SOUPERI.map(k => { const r = (S.penalty||{})[k];
         return `<button class="klub" data-klub="${k}"><span class="dres" style="${dresStyl(k)}"></span><span>${esc(KLUBY[k].nazev)}</span>${r && r.v ? `<small>🏆 ${r.v}×</small>` : ''}</button>`; }).join('')}</div>
-      <div class="legenda stred">Když kopeš ty, vyber anglické slovo. Když kope soupeř, chytáš: vyber český překlad.</div>`, 'hra');
+      <div class="legenda stred">${jeSl(slova[0]) ? 'Když kopeš ty, uvidíš minulý čas a vybereš přítomný. Když kope soupeř, chytáš: vyber minulý čas.' : 'Když kopeš ty, vyber anglické slovo. Když kope soupeř, chytáš: vyber český překlad.'}</div>`, 'hra');
     main.querySelectorAll('[data-klub]').forEach(b => b.onclick = () => penalty(slova, b.dataset.klub));
     return;
   }
   const K = KLUBY[souper];
-  const pool = slova.length >= 3 ? slova : vsechnaSlova();
+  const sl = jeSl(slova[0]);
+  const pool = slova.length >= 3 ? slova : sl ? vsechnaSlovesa() : vsechnaSlova();
   let davka = vyberDavku(slova, 'cz2en', 20), qi = 0;
   const dalsiSlovo = () => { if(qi >= davka.length){ davka = zamichej(davka); qi = 0; } return davka[qi++]; };
   const ja = [], on = [], chybna = [];
@@ -938,6 +989,7 @@ function penalty(slova, souper){
     const w = dalsiSlovo(), strilim = naRade === 'ja', gen = generace + 1;
     const otazka = strilim ? w.cz : w.en, pole = strilim ? 'en' : 'cz';
     const dres = strilim ? K.barvy : ['#2563eb', '#1e3a8a'];
+    const recO = rec(w, strilim ? 'cz' : 'en'), recA = rec(w, strilim ? 'en' : 'cz');
     obrazovka(`
       <div class="tabule">
         <div class="tym"><span class="dres" style="background:#2563eb"></span><b>${esc(HRACI[hrac].jm)}</b><span class="kola">${tecky(ja)}</span></div>
@@ -949,10 +1001,10 @@ function penalty(slova, souper){
         <div class="mic" id="mic">⚽</div>
         <div class="hlaska" id="hlaska"></div>
       </div>
-      <div class="zadani">${strilim ? '⚽ <b>Kopeš ty!</b> Jak se řekne anglicky:' : '🧤 <b>Chytáš!</b> Co znamená:'}</div>
-      <div class="otazka">${esc(otazka)} ${strilim ? '' : `<button class="mluv male" data-mluv="${esc(w.en)}" aria-label="Přečíst">🔊</button>`}</div>
+      <div class="zadani">${strilim ? (sl ? '⚽ <b>Kopeš ty!</b> Jaký je přítomný čas od:' : '⚽ <b>Kopeš ty!</b> Jak se řekne anglicky:') : (sl ? '🧤 <b>Chytáš!</b> Jaký je minulý čas od:' : '🧤 <b>Chytáš!</b> Co znamená:')}</div>
+      <div class="otazka">${esc(otazka)} ${recO ? `<button class="mluv male" data-mluv="${esc(recO)}" aria-label="Přečíst">🔊</button>` : ''}</div>
       ${tlacitkaMoznosti(moznosti(w, pole, pool, 3))}`, 'hra penalty');
-    if(!strilim && S.zvuk) mluv(w.en);
+    if(recO && S.zvuk) mluv(recO);
     vyberMoznost(w[pole], ok => {
       celkem++;
       if(ok) spr++; else if(!chybna.includes(w)) chybna.push(w);
@@ -965,7 +1017,7 @@ function penalty(slova, souper){
       (strilim ? ja : on).push(gol);
       const dobre = strilim === gol;   // dobře pro Jakuba: jeho gól, nebo jeho zákrok
       efekt(dobre ? 'ok' : 'spatne');
-      if(strilim && S.zvuk) setTimeout(() => { if(gen===generace && S.zvuk) mluv(w.en); }, 200);
+      if(recA && S.zvuk) setTimeout(() => { if(gen===generace && S.zvuk) mluv(recA); }, 200);
       setTimeout(() => {
         const h = $('#hlaska'); if(!h || gen !== generace) return;
         h.textContent = gol ? (strilim ? 'GÓÓÓL! 🎉' : 'Gól soupeře 😬') : (strilim ? 'Chytil to! 🧤' : 'Chytil jsi to! 🧤🎉');
@@ -1046,6 +1098,43 @@ function zalohaCti(kod){
   const d = JSON.parse(decodeURIComponent(escape(atob(t.slice(4)))));
   if(!d || typeof d !== 'object' || !d.slova || typeof d.slova !== 'object') throw new Error('data');
   return oprav(d);
+}
+
+/* ---------- slovesa: přítomný a minulý čas ---------- */
+function slovesaDomov(){
+  const vse = vsechnaSlovesa(), slova = vybranaSlovesa();
+  const umi = slova.filter(w => box(w,'en2cz') >= 3).length;
+  const rek = rekordyText(6, 'v');
+  const casti = [0,1,2].map(i => `<button class="sada ${S.slSk===i?'zap':''}" data-sk="${i}">${i+1}. část <small>${vse.filter(w=>w.sk===i).length}</small></button>`).join('');
+  obrazovka(`
+    <div class="pozdrav mensi">🕰️ Slovesa: dnes a včera</div>
+    <div class="postup">Today I <b>see</b>. Yesterday I <b>saw</b>. · ${jeJakub() ? 'Umíš' : 'Jakub umí'} <b>${umi}</b> z <b>${slova.length}</b></div>
+    <div class="sady"><button class="sada ${S.slSk==null?'zap':''}" data-sk="*">Všechna <small>${vse.length}</small></button>${casti}</div>
+    <div class="rezimy tri">
+      <button class="rezim" data-rezim="en2cz"><span class="ik">🟢 → 🔴</span><span><b>Kartičky</b><br><small>Uvidíš „see“, řekni minulý čas</small></span></button>
+      <button class="rezim" data-rezim="cz2en"><span class="ik">🔴 → 🟢</span><span><b>Kartičky naopak</b><br><small>Uvidíš „saw“, řekni přítomný čas</small></span></button>
+      <button class="rezim" data-rezim="spoj"><span class="ik">🧩</span><span><b>Domino</b><br><small>${rek ? '🏆 '+rek : 'Spoj see a saw co nejrychleji'}</small></span></button>
+      <button class="rezim" data-rezim="psani"><span class="ik">✏️</span><span><b>Psaní</b><br><small>Napiš minulý čas</small></span></button>
+      <button class="rezim" data-rezim="poslech"><span class="ik">🎧</span><span><b>Poslech</b><br><small>Uslyšíš sloveso, vyber minulý čas</small></span></button>
+      <button class="rezim fotbal" data-rezim="penalty"><span class="ik">⚽🥅</span><span><b>Penalty</b><br><small>Správná odpověď = gól</small></span></button>
+    </div>
+    <div class="odkazy"><button class="odkaz" id="slSeznam">📖 Seznam sloves s výslovností</button></div>
+  `, 'domov2');
+  main.querySelectorAll('[data-sk]').forEach(b => b.onclick = () => { S.slSk = b.dataset.sk === '*' ? null : Number(b.dataset.sk); uloz(false); slovesaDomov(); });
+  main.querySelectorAll('[data-rezim]').forEach(b => b.onclick = () => spust(b.dataset.rezim, vybranaSlovesa()));
+  $('#slSeznam').onclick = seznamSloves;
+}
+function seznamSloves(){
+  const slova = vybranaSlovesa();
+  const tecky = (w,s) => { const b = box(w,s); return `<span class="tecky">${[1,2,3,4,5].map(i=>`<i class="${i<=b?'pl':''}"></i>`).join('')}</span>`; };
+  const tl = t => `<button class="mluv male" data-mluv="${esc(t)}" aria-label="Přečíst">🔊</button>`;
+  obrazovka(`<div class="seznam">
+    <table><thead><tr><th>🟢 Přítomný</th><th>🔴 Minulý</th><th>Česky</th><th>🟢→🔴</th><th>✏️</th></tr></thead>
+    <tbody>${slova.map((w,i)=>`${i===0||slova[i-1].sk!==w.sk?`<tr class="sekce"><td colspan="5">${w.sk+1}. část</td></tr>`:''}<tr><td>${tl(w.en)} ${esc(w.en)}</td><td class="minuly">${tl(rec(w,'cz'))} ${esc(w.cz)}${w.pozn ? `<br><small>${esc(w.pozn)}</small>` : ''}</td><td>${esc(w.vyznam)}</td><td>${tecky(w,'en2cz')}</td><td>${tecky(w,'psani')}</td></tr>`).join('')}</tbody></table>
+    <div class="legenda">Ťukni na 🔊 a poslechni si výslovnost. Zelené tečky = kolikrát za sebou to věděl (max 5).</div>
+    <button class="odkaz" id="zpetSl">← Zpět na slovesa</button>
+  </div>`, 'seznam-obr');
+  $('#zpetSl').onclick = slovesaDomov;
 }
 
 /* ---------- přehled tréninku po dnech ---------- */
